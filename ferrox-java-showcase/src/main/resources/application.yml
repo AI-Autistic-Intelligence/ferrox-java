@@ -1,0 +1,9 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: ferrox-java-showcase
+  threads:
+    virtual:
+      enabled: true # Enable Java 21 Virtual Threads natively!
