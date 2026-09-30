@@ -5,7 +5,7 @@ plugins {
 }
 
 allprojects {
-    group = "dev.ferrox"
+    group = "io.github.ai-autistic-intelligence"
     version = "1.0.0"
     
     repositories {
