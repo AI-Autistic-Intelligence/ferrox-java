@@ -7,3 +7,4 @@ dependencies {
     // Optionally include security and cqrs if they are standard in the framework
     api(project(":ferrox-java-security"))
 }
+

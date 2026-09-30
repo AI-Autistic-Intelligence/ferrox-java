@@ -19,7 +19,7 @@ public class PasetoTokenService {
     private final SecretKey sharedKey = Keys.secretKey("12345678901234567890123456789012".getBytes());
 
     public String generateToken(String subject, String role) {
-        return Pasetos.V4.LOCAL.builder()
+        return Pasetos.V2.LOCAL.builder()
                 .setSharedSecret(sharedKey)
                 .setSubject(subject)
                 .claim("role", role)
@@ -28,7 +28,7 @@ public class PasetoTokenService {
     }
 
     public Paseto verifyAndExtractClaims(String token) {
-        return Pasetos.V4.LOCAL.parserBuilder()
+        return Pasetos.parserBuilder()
                 .setSharedSecret(sharedKey)
                 .build()
                 .parse(token);

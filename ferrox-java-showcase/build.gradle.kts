@@ -4,4 +4,6 @@ plugins {
 
 dependencies {
     implementation(project(":ferrox-starter"))
+    implementation("org.springframework.boot:spring-boot-starter-web")
 }
+

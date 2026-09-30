@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Off-Heap Arena Allocator leveraging Java 21 Foreign Function & Memory API (Project Panama).
+ * Off-Heap Arena Allocator leveraging Java 21 Foreign Function and Memory API (Project Panama).
  * Bypasses the JVM Garbage Collector to prevent Stop-The-World pauses under extreme load.
  */
 @Service

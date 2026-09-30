@@ -3,3 +3,4 @@ dependencies {
     // They are meant to be pure Java or minimal.
     implementation(project(":ferrox-java-dashboard"))
 }
+
