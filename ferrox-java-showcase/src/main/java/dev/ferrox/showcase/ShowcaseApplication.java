@@ -1,12 +1,9 @@
 package dev.ferrox.showcase;
 
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.Import;
-import dev.ferrox.web.FerroxAutoConfiguration;
+import dev.ferrox.core.annotation.FerroxApplication;
 
-@SpringBootApplication
-@Import(FerroxAutoConfiguration.class)
+@FerroxApplication
 public class ShowcaseApplication {
     public static void main(String[] args) {
         SpringApplication.run(ShowcaseApplication.class, args);
