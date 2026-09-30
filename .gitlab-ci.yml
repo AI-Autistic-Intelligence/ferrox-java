@@ -1,0 +1,24 @@
+image: eclipse-temurin:21-jdk-alpine
+
+stages:
+  - test
+  - build
+
+cache:
+  paths:
+    - .gradle/wrapper
+    - .gradle/caches
+
+test:
+  stage: test
+  script:
+    - chmod +x ./gradlew || true
+    - ./gradlew build || gradle build
+
+docker-build:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  script:
+    - docker build -t ferrox/java-processor:$CI_COMMIT_SHA .
