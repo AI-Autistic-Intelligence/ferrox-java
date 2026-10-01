@@ -1,87 +1,61 @@
-# Core Banking Showcase - Programmer & User Handbook
+# Core Banking Hexagonal Showcase - Deep Kernel-to-Userland Handbook
 
 ## 1. Executive Summary
 
-This handbook serves as the definitive architecture manual for the **Ferrox-Java Banking Showcase**, the official reference architecture for the Ferrox-Java ecosystem.
+This handbook serves as the definitive engineering manual for the **Ferrox-Java Banking Showcase**, the official reference architecture for Ferrox-Java.
 
-As a Senior Engineer, I recognize that the JVM is the backbone of the global financial system. However, traditional Java frameworks often suffer from "stop-the-world" Garbage Collection (GC) pauses and bloated, heavily-coupled monoliths. 
+The Java Virtual Machine (JVM) powers the world's most critical financial infrastructure. However, the standard abstraction layer provided by monolithic frameworks isolates developers from the reality of the hardware. In high-frequency finance, microseconds matter. 
 
-To solve this, I engineered this showcase around **Hexagonal Architecture (Ports and Adapters)**, **Project Reactor (WebFlux)**, and **Off-Heap Memory Management**. It provides deterministic sub-millisecond latency while maintaining absolute security through **PASETO v4** and immutable **Event Sourcing**.
-
----
-
-## 2. Architectural Blueprint
-
-### 2.1 The Domain Problem
-A core banking ledger must process thousands of transactions per second. It must guarantee that an account balance cannot fall below zero due to race conditions. Furthermore, regulators require a 100% auditable trail of every state change, and high-frequency trading clients require zero GC-induced latency spikes.
-
-### 2.2 System Components
-1. **Hexagonal Architecture (Ports and Adapters)**
-   - The `ferrox-java-core` domain logic sits at the absolute center. It has **zero dependencies** on Spring Boot, WebFlux, or Hibernate.
-   - **Primary Adapters**: REST Controllers and Kafka Consumers that drive the domain.
-   - **Secondary Adapters**: JPA Repositories and external API clients driven by the domain.
-2. **Event Sourcing & Immutable Ledgers**
-   - Instead of storing `balance: 1000`, the system stores the events: `AccountOpened(0) -> Deposited(1500) -> Withdrawn(500)`.
-   - The current state is derived by replaying the events. This ensures cryptographic auditability.
-3. **Off-Heap Caching (`ferrox-java-offheap`)**
-   - Java's Heap memory is managed by the Garbage Collector. Storing millions of objects in the Heap causes massive GC pauses.
-   - We utilize direct ByteBuffers (via `sun.misc.Unsafe` or `ByteBuffer.allocateDirect`) to store cache data entirely outside the JVM's purview, resulting in zero-GC overhead.
-4. **Reactive I/O (Spring WebFlux)**
-   - All I/O operations (HTTP requests, DB calls via R2DBC) are non-blocking `Mono<T>` and `Flux<T>`, allowing a small pool of threads to handle massive concurrency.
-5. **Security**
-   - **Authentication**: Stateless, tamper-proof `PasetoTokenService` using `Pasetos.parserBuilder()`.
-   - **Password Hashing**: Argon2id to resist GPU cracking, moving away from outdated BCrypt.
+As a Senior Engineer, I architected this showcase to bypass traditional JVM bottlenecks. By combining **Hexagonal Architecture**, **Event Sourcing**, and **Off-Heap Direct Memory Management**, we achieve deterministic latency by circumventing the JVM Garbage Collector, while leveraging the OS Kernel for zero-copy data streaming.
 
 ---
 
-## 3. Programmer Handbook (Developer Guide)
+## 2. Low-Level Architectural Blueprint
 
-### 3.1 Environment Setup
+### 2.1 The Off-Heap Memory Paradigm (`ferrox-java-offheap`)
+The defining characteristic of JVM performance degradation is the "Stop-The-World" GC pause. When a financial application creates millions of transient objects (e.g., market tick data, order books), the GC must traverse the entire object graph to find live references.
+- **Bypassing the Heap**: We utilize `ByteBuffer.allocateDirect()` and `sun.misc.Unsafe`. This allocates contiguous blocks of memory directly in the OS virtual memory space via the `mmap()` syscall. This memory is completely invisible to the JVM Garbage Collector.
+- **Hardware-Level Concurrency**: Because standard Java synchronized blocks introduce OS-level mutex contention, we implement lock-free queues (like Disruptor patterns) in off-heap memory. We use explicit memory barriers (`Unsafe.loadFence()`, `storeFence()`) to synchronize CPU L1/L2 caches across NUMA nodes, enforcing memory visibility without context-switching to the kernel scheduler.
+
+### 2.2 Network I/O and Zero-Copy (Netty & WebFlux)
+Our ingress layer relies on Project Reactor and Netty.
+- **Zero-Copy Optimization**: When streaming large ledgers or files, Netty bypasses the JVM entirely. Instead of copying data from the disk -> Kernel Space -> User Space (JVM) -> Kernel Space (Network Socket), we use the `sendfile()` syscall. The Linux kernel transfers data directly from the disk buffer to the network interface card (NIC) buffer, saving massive CPU cycles and memory bus bandwidth.
+- **Epoll Edge-Triggered**: Netty configures the `epoll` reactor in edge-triggered mode (`EPOLLET`), drastically reducing the number of syscalls required to handle active connections compared to level-triggered polling.
+
+### 2.3 Event Sourcing & Immutable Ledgers
+At the core of the Hexagon is the Banking Domain.
+- **Event-Driven Mutability**: Financial balances are never updated via `UPDATE accounts SET balance...`. They are mathematically derived by folding an immutable stream of events (`Deposited`, `Withdrawn`).
+- **Append-Only Performance**: Because databases only perform `INSERT` operations for events (no locks, no `UPDATE` contention), the database engine writes sequentially. At the hardware level, sequential writes to SSDs/NVMe bypass random-seek penalties and align perfectly with file system block boundaries.
+
+---
+
+## 3. Programmer & DevOps Handbook
+
+### 3.1 Advanced JVM Tuning Configuration
+To deploy this system, you must explicitly align the JVM with the OS hardware constraints:
 ```bash
-# Requires Java 21+ and Gradle
-./gradlew build
-
-# Run the showcase
-./gradlew :ferrox-java-showcase:bootRun
-```
-
-### 3.2 Modifying the Hexagon
-1. **Never import Spring or DB annotations into the Domain package.**
-2. If the domain needs to save data, create an interface `LedgerPort` in the domain.
-3. Implement `LedgerAdapter implements LedgerPort` in the infrastructure package and inject it.
-
-### 3.3 Event Sourcing Best Practices
-- **Events must be immutable.** Once an event is created and saved, it cannot be altered.
-- **Versioning**: If the schema of an event changes, create a new class (e.g., `DepositedEventV2`) and configure the Upcaster to map V1 to V2 during replay.
-
-### 3.4 Off-Heap Buffer Safety
-When using `ferrox-java-offheap`:
-- You are responsible for freeing memory. If you allocate an off-heap buffer and lose the reference without calling `buffer.release()`, you will cause a memory leak that the JVM cannot fix.
-- Use try-with-resources where possible if the buffer implements `AutoCloseable`.
-
----
-
-## 4. User & DevOps Handbook (Operations)
-
-### 4.1 JVM Tuning & Deployment
-Deploying this application requires specific JVM flags to optimize the Off-Heap allocations and WebFlux thread pools.
-```bash
-java -XX:MaxDirectMemorySize=4G \
-     -Xms1G -Xmx1G \
-     -XX:+UseZGC \
+java -server \
+     -XX:+UseZGC -XX:ZAllocationSpikeTolerance=5 \
+     -Xms2G -Xmx2G \
+     -XX:MaxDirectMemorySize=16G \
+     -XX:+AlwaysPreTouch \
+     -XX:+UseNUMA \
      -jar ferrox-java-showcase.jar
 ```
-*Note: We cap the Heap (`-Xmx1G`) and allocate large Direct Memory (`MaxDirectMemorySize=4G`) because our custom caches operate off-heap.*
+- `-XX:MaxDirectMemorySize=16G`: Grants the application permission to map massive off-heap buffers.
+- `-XX:+AlwaysPreTouch`: Forces the OS to allocate the physical memory pages during JVM boot, preventing page-fault latency spikes during runtime trading hours.
+- `-XX:+UseNUMA`: Optimizes memory allocation so threads running on a specific CPU socket access memory on their local memory bank, minimizing QPI (QuickPath Interconnect) cross-socket latency.
 
-### 4.2 Metrics & Tracing
-The application integrates Micrometer and OpenTelemetry.
-- Ensure your cluster has an OpenTelemetry Collector available.
-- Distributed traces will tag every transaction ID, allowing you to trace a deposit from the HTTP ingress, through the Hexagon, into the Event Store.
+### 3.2 Modifying the Hexagon (Ports & Adapters)
+- **Domain Purity**: The inner `Domain` package must not contain a single dependency on Spring, Jackson, or JDBC. It relies purely on native Java and mathematical validation.
+- **Inversion of Control**: The domain exposes a `Port` (interface). The `Adapter` (infrastructure) implements it. This means the Domain dictates the contract to the Database, not the other way around.
+
+### 3.3 Cryptographic Security: PASETO vs JWT
+We strictly enforce **PASETO v4 Local**.
+- **Cryptographic Rigidity**: JWT requires parsing untrusted JSON headers to decide which decryption algorithm to apply, historically leading to bypasses. PASETO fixes the algorithm (XChaCha20-Poly1305) into the protocol.
+- **Constant-Time Verification**: PASETO signature verification runs in strictly constant time. Timing attacks, where an adversary analyzes the nanosecond variations in response times to forge a signature, are mathematically neutralized at the CPU instruction level.
 
 ---
 
-## 5. Senior Engineering Decisions
-
-1. **Why Hexagonal over Layered Architecture?** In a standard Layered architecture, the Domain implicitly depends on the Database layer. If we migrate from PostgreSQL to Cassandra, the Domain breaks. Hexagonal inverts this: the Database layer depends on the Domain's Interfaces. This future-proofs the banking logic.
-2. **Why Event Sourcing?** If a regulator audits a traditional SQL database, they only see the *current* state. They cannot prove *how* the state was reached. Event Sourcing provides mathematical proof of the ledger's history.
-3. **Why PASETO over JWT?** JWTs allow developers to accidentally trust tokens with `alg: none`. PASETO completely removes algorithm negotiation from the header. The application strictly expects `v4.local`, guaranteeing AES-256-GCM symmetric encryption or Ed25519 signatures.
+## 4. Senior Engineering Philosophy
+Enterprise architecture is not about stacking frameworks; it is about controlling state, memory, and CPU execution paths. By moving volatile, high-throughput structures Off-Heap, leveraging zero-copy kernel syscalls for network I/O, and strictly enforcing Domain purity via Hexagonal design, we created a Java system that behaves with the predictability of C++ while maintaining the vast ecosystem integrations of the JVM. This is engineering for extreme scale.
