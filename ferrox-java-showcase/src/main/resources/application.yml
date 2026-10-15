@@ -1,9 +1,40 @@
 server:
-  port: 8080
+  port: 8082
+  shutdown: graceful
 
 spring:
   application:
     name: ferrox-java-showcase
   threads:
     virtual:
-      enabled: true # Enable Java 21 Virtual Threads natively!
+      enabled: true # Enable Java 21 Virtual Threads natively (Project Loom)
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    prometheus:
+      enabled: true
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha

@@ -1,0 +1,76 @@
+services:
+  ferrox-java-showcase:
+    build:
+      context: ../..
+      dockerfile: ferrox-java/ferrox-java-showcase/Dockerfile
+    container_name: ferrox-java-showcase
+    environment:
+      - SERVER_PORT=8082
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_THREADS_VIRTUAL_ENABLED=true
+      - SPRING_DATA_REDIS_HOST=redis-java
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-java:5432/ferrox_showcase
+      - SPRING_DATASOURCE_USERNAME=ferrox
+      - SPRING_DATASOURCE_PASSWORD=ferrox_secret
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres-java:
+        condition: service_healthy
+      redis-java:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8082/actuator/health/liveness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - ferrox-network
+
+  postgres-java:
+    image: postgres:16-alpine
+    container_name: ferrox-postgres-java
+    environment:
+      POSTGRES_DB: ferrox_showcase
+      POSTGRES_USER: ferrox
+      POSTGRES_PASSWORD: ferrox_secret
+    ports:
+      - "5436:5432"
+    volumes:
+      - postgres_java_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ferrox -d ferrox_showcase"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - ferrox-network
+
+  redis-java:
+    image: redis:7-alpine
+    container_name: ferrox-redis-java
+    ports:
+      - "6383:6379"
+    volumes:
+      - redis_java_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - ferrox-network
+
+volumes:
+  postgres_java_data:
+  redis_java_data:
+
+networks:
+  ferrox-network:
+    name: ferrox-network
+    driver: bridge

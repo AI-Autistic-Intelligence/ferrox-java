@@ -38,3 +38,5 @@ out/
 ### Others ###
 *.log
 *.sqlite
+bin/
+**/bin/
