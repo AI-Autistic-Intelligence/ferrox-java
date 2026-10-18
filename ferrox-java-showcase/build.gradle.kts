@@ -17,6 +17,7 @@ dependencies {
     implementation("io.micrometer:micrometer-registry-prometheus")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0")
+    implementation("org.apache.kafka:kafka-clients")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
